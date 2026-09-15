@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# Smart Notebook
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+دفتر ملاحظات عربي مرن للكتابة والرسم والصور، مصمم للموبايل والتابلت والويب.
 
-Currently, two official plugins are available:
+**جرّبه الآن:** https://saifheny.github.io/CO/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ما الذي يقدمه؟
 
-## React Compiler
+- رسم حر، تظليل، ممحاة، نصوص، صور وأشكال قابلة للتحريك والتكبير.
+- تحرير الصور: قصّ دائري أو حواف ناعمة، إطارات كلاسيكية/متقطعة/مزدوجة/بولارويد، وتعليقات أنيقة.
+- إزالة خلفية محلية بالذكاء الاصطناعي؛ لا تُرفع الصورة إلى خادم التطبيق.
+- وضع عرض تفاعلي: يعرض عناصر الصفحة بالتتابع مع اختيار الحركة والمدة.
+- PWA قابل للتثبيت على الهاتف والتابلت، ويعمل دون اتصال بعد التثبيت.
+- تحفظ الملاحظات داخل المتصفح على جهاز المستخدم.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## التشغيل محليًا
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+ولإنشاء نسخة الإنتاج:
+
+```bash
+npm run build
+```
+
+## النشر
+
+أي دفع إلى فرع `main` يشغّل GitHub Actions وينشر التطبيق على GitHub Pages.
+
+> إزالة الخلفية تستخدم `@imgly/background-removal` في المتصفح. راجع ترخيص AGPL قبل أي استخدام تجاري.
