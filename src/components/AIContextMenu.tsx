@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { ai } from '../lib/ai';
-import { Sparkles, X, Wand2, MessageSquare, ArrowUpToLine, ArrowDownToLine, RefreshCw, Edit3, Eraser, AlignCenter, AlignRight, AlignLeft, SlidersHorizontal, Play, Pause, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, X, Wand2, MessageSquare, ArrowUpToLine, ArrowDownToLine, RefreshCw, Edit3, Eraser, AlignCenter, AlignRight, AlignLeft, SlidersHorizontal, Play, Pause, Volume2, VolumeX, Copy, LockKeyhole, Trash2, Layers3 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { v4 as uuidv4 } from 'uuid';
@@ -43,12 +43,30 @@ export const AIContextMenu: React.FC = () => {
     await db.pages.update(page.id, { elements: newEls, updatedAt: Date.now() });
   };
 
+  if (node.isLocked) return <div className="fixed bottom-4 left-4 z-[60]" dir="rtl" style={{ fontFamily: 'Cairo, system-ui, sans-serif' }}><button onClick={() => updateEl({ isLocked: false })} className="flex items-center gap-2 rounded-2xl bg-stone-900 px-4 py-3 text-xs font-bold text-white shadow-xl transition hover:bg-stone-700"><LockKeyhole size={16}/> العنصر مقفول — دوس لفك القفل</button></div>;
+
   const moveLayer = async (dir: 'up' | 'down') => {
     const arr = [...page.elements];
     const idx = arr.findIndex(e => e.id === node.id);
     if (dir === 'up' && idx < arr.length - 1) [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
     else if (dir === 'down' && idx > 0) [arr[idx], arr[idx - 1]] = [arr[idx - 1], arr[idx]];
     await db.pages.update(page.id, { elements: arr, updatedAt: Date.now() });
+  };
+
+  const duplicate = async () => {
+    const copy = { ...node, id: uuidv4(), x: node.x + 28, y: node.y + 28, isLocked: false } as CanvasElement;
+    await db.pages.update(page.id, { elements: [...page.elements, copy], updatedAt: Date.now() });
+    setSelectedElements([copy.id]);
+  };
+
+  const removeNode = async () => {
+    await db.pages.update(page.id, { elements: page.elements.filter(element => element.id !== node.id), updatedAt: Date.now() });
+    setSelectedElements([]);
+  };
+
+  const editNode = () => {
+    if (node.type === 'text' || node.type === 'comment') setEditingTextId(node.id);
+    else setPanelOpen(true);
   };
 
   const removeBackground = async () => {
@@ -162,6 +180,13 @@ export const AIContextMenu: React.FC = () => {
 
   return (
     <div className="fixed left-3 right-3 bottom-3 z-[60] sm:left-4 sm:right-auto sm:bottom-auto sm:top-20" style={{ fontFamily: 'Cairo, system-ui, sans-serif', ...(panelPosition ? { left: panelPosition.x, top: panelPosition.y, right: 'auto', bottom: 'auto', width: 'min(320px, calc(100vw - 16px))' } : {}) }} dir="rtl">
+      <div className="mb-2 flex w-full items-stretch overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-lg sm:w-[320px]" aria-label="خمس أدوات للعنصر المختار">
+        <button onClick={duplicate} title="انسخ العنصر" className="flex min-w-0 flex-1 flex-col items-center gap-0.5 border-l border-stone-100 px-1 py-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50"><Copy size={15}/>نسخ</button>
+        <button onClick={() => updateEl({ isLocked: true })} title="اقفل العنصر" className="flex min-w-0 flex-1 flex-col items-center gap-0.5 border-l border-stone-100 px-1 py-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50"><LockKeyhole size={15}/>قفل</button>
+        <button onClick={editNode} title="عدّل العنصر" className="flex min-w-0 flex-1 flex-col items-center gap-0.5 border-l border-stone-100 px-1 py-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50"><Edit3 size={15}/>تعديل</button>
+        <button onClick={() => moveLayer('up')} title="حطه قدّام" className="flex min-w-0 flex-1 flex-col items-center gap-0.5 border-l border-stone-100 px-1 py-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50"><Layers3 size={15}/>ترتيب</button>
+        <button onClick={removeNode} title="امسح العنصر" className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-bold text-red-600 hover:bg-red-50"><Trash2 size={15}/>حذف</button>
+      </div>
       {!panelOpen ? <button onClick={() => setPanelOpen(true)} aria-label="افتح أدوات الحاجة اللي اخترتها" className="mr-auto flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-700 shadow-md hover:bg-stone-50"><SlidersHorizontal size={17}/></button> : <div className="bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 w-full sm:w-[320px] max-h-[62vh] overflow-y-auto">
         
         {/* Header */}
@@ -171,7 +196,7 @@ export const AIContextMenu: React.FC = () => {
             <B onClick={() => moveLayer('down')}><ArrowDownToLine size={11} className="inline ml-0.5" />ورا</B>
           </div>
           <span className="text-[10px] text-gray-400 font-semibold">
-            {node.type === 'image' ? '🖼️ صورة' : node.type === 'video' ? '🎬 فيديو' : node.type === 'text' ? '📝 نص' : node.type === 'stroke' ? '✏️ خط' : '🔷 شكل'}
+            {node.type === 'image' ? '🖼️ صورة' : node.type === 'video' ? '🎬 فيديو' : node.type === 'audio' ? '🔊 صوت' : node.type === 'comment' ? '💬 تعليق' : node.type === 'text' ? '📝 نص' : node.type === 'stroke' ? '✏️ خط' : '🔷 شكل'}
           </span>
           <div className="flex gap-1"><button onClick={() => setPanelOpen(false)} title="صغّر الأدوات" className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"><SlidersHorizontal size={13} /></button><button onClick={() => { setPanelOpen(false); setSelectedElements([]); }} title="اقفل الأدوات" className="w-6 h-6 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"><X size={14} /></button></div>
         </div>
@@ -227,6 +252,8 @@ export const AIContextMenu: React.FC = () => {
             {renderMediaFrameControls('فيديو')}
           </>}
 
+          {node.type === 'audio' && <div className="rounded-xl border border-sky-100 bg-sky-50 p-2.5"><p className="text-[10px] leading-4 text-sky-700">الصوت عنصر كامل في الصفحة: حرّكه، كبّره، انسخه أو اقفله بنفس أدوات أي عنصر تاني.</p><div className="mt-2 flex gap-1.5"><B onClick={() => updateEl({ playing: !(node as any).playing })} cls="bg-white text-sky-700 border border-sky-100">{(node as any).playing ? <Pause size={12} className="inline ml-1"/> : <Play size={12} className="inline ml-1"/>}{(node as any).playing ? 'إيقاف' : 'تشغيل'}</B><B onClick={() => updateEl({ title: `${(node as any).title || 'تسجيل صوتي'} ✦` })} cls="bg-white text-sky-700 border border-sky-100"><Edit3 size={12} className="inline ml-1"/>اسم جديد</B></div></div>}
+
           {/* ─── TEXT CONTROLS ─── */}
           {node.type === 'text' && (<>
             <div className="flex gap-1.5">
@@ -255,6 +282,8 @@ export const AIContextMenu: React.FC = () => {
               </div>
             </div>
           </>)}
+
+          {node.type === 'comment' && <><div className="rounded-xl border border-violet-100 bg-violet-50 p-2.5"><p className="text-[10px] leading-4 text-violet-700">الفقاعة حجمها بيتظبّط تلقائيًا على طول الكلام وحجم الخط. دوس تعديل واكتب فوق الفقاعة نفسها.</p></div><div><label className="text-[10px] text-gray-400 font-bold block mb-1.5">شكل التعليق</label><div className="flex flex-wrap gap-1.5">{([['speech','فقاعة'],['note','ملصق'],['cloud','سحابة'],['label','عنوان'],['thought','فكرة']] as const).map(([style, label]) => <B key={style} active={(node as any).style === style} onClick={() => updateEl({ style })}>{label}</B>)}</div></div><div><label className="text-[10px] text-gray-400 font-bold block mb-1.5">لون الفقاعة</label><div className="flex gap-1.5">{['#292524','#dc2626','#2563eb','#16a34a','#7c3aed','#ea580c'].map(fill => <button key={fill} onClick={() => updateEl({ fill })} className={clsx('h-6 w-6 rounded-full border-2', (node as any).fill === fill ? 'scale-110 border-stone-400' : 'border-transparent')} style={{ backgroundColor: fill }} />)}</div></div></>}
 
           {/* ─── STROKE CONTROLS ─── */}
           {node.type === 'stroke' && (<>

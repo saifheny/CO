@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ToolType } from '../types';
+import type { CommentStyle, ShapeType, ToolType } from '../types';
 
 interface AppState {
   currentTool: ToolType;
@@ -11,11 +11,14 @@ interface AppState {
   penWidth: number;
   setPenWidth: (width: number) => void;
 
-  activeShape: 'rectangle' | 'circle' | 'triangle' | 'arrow' | 'line';
-  setActiveShape: (shape: 'rectangle' | 'circle' | 'triangle' | 'arrow' | 'line') => void;
+  activeShape: ShapeType;
+  setActiveShape: (shape: ShapeType) => void;
 
   activeFont: string;
   setActiveFont: (font: string) => void;
+
+  activeCommentStyle: CommentStyle;
+  setActiveCommentStyle: (style: CommentStyle) => void;
 
   selectedElements: string[];
   setSelectedElements: (ids: string[]) => void;
@@ -54,6 +57,9 @@ export const useStore = create<AppState>((set) => ({
 
   activeFont: 'Cairo',
   setActiveFont: (font) => set({ activeFont: font }),
+
+  activeCommentStyle: 'speech',
+  setActiveCommentStyle: (style) => set({ activeCommentStyle: style }),
 
   selectedElements: [],
   setSelectedElements: (ids) => set({ selectedElements: ids }),

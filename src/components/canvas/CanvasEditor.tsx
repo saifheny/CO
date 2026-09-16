@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Stage, Layer, Line, Rect, Circle, RegularPolygon, Arrow, Transformer, Text, Image as KonvaImage, Group } from 'react-konva';
+import { Stage, Layer, Line, Rect, Circle, Ellipse, RegularPolygon, Arrow, Star, Path, Transformer, Text, Image as KonvaImage, Group } from 'react-konva';
 import { useStore } from '../../store/useStore';
-import type { Point, StrokeElement, CanvasElement, ShapeElement, VideoElement } from '../../types';
+import type { Point, StrokeElement, CanvasElement, ShapeElement, VideoElement, AudioElement, CommentElement } from '../../types';
 import { getStroke } from 'perfect-freehand';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../db/db';
@@ -111,7 +111,11 @@ const ImgNode = React.memo(({ el, sel, onDE, onTE, onSelect, onCaptionDrag }: an
   const borderW = el.borderWidth || 0;
   const borderColor = el.borderColor || '#000000';
   const borderStyle = el.borderStyle || 'solid';
-  const captionWidth = Math.min(230, el.width);
+  // Captions grow with the actual wording instead of leaving a fixed oversized bubble.
+  const captionChars = Math.max(8, Math.floor(Math.min(220, el.width) / 8));
+  const captionLines = Math.max(1, Math.ceil((el.caption || '').length / captionChars));
+  const captionWidth = Math.min(Math.min(230, el.width), Math.max(88, Math.min((el.caption || '').length, captionChars) * 8 + 26));
+  const captionHeight = Math.max(38, captionLines * 20 + 18);
   const captionX = typeof el.captionX === 'number' ? el.captionX : Math.max(0, el.width - captionWidth);
   const captionY = typeof el.captionY === 'number' ? el.captionY : -55;
 
@@ -124,9 +128,9 @@ const ImgNode = React.memo(({ el, sel, onDE, onTE, onSelect, onCaptionDrag }: an
       <MediaFrameFront width={el.width} height={el.height} borderWidth={borderW} borderColor={borderColor} borderStyle={borderStyle} cropShape={el.cropShape} />
 
       {el.caption && <Group x={captionX} y={captionY} draggable={sel} onDragEnd={(event) => { event.cancelBubble = true; onCaptionDrag(el.id, event.target.x(), event.target.y()); }} onClick={onSelect} onTap={onSelect}>
-        <Rect width={captionWidth} height={42} fill="#292524" opacity={0.96} cornerRadius={14} shadowColor="#000" shadowOpacity={0.15} shadowBlur={10} />
-        <RegularPolygon x={captionWidth - 22} y={42} sides={3} radius={8} rotation={180} fill="#292524" listening={false} />
-        <Text text={el.caption} x={5} y={8} width={Math.max(10, captionWidth - 10)} fontSize={13} fontFamily={el.fontFamily || "Cairo, Arial"} fill="#ffffff" fontStyle="bold" align="right" padding={4} ellipsis listening={false} />
+        <Rect width={captionWidth} height={captionHeight} fill="#292524" opacity={0.96} cornerRadius={14} shadowColor="#000" shadowOpacity={0.15} shadowBlur={10} />
+        <RegularPolygon x={captionWidth - 22} y={captionHeight} sides={3} radius={8} rotation={180} fill="#292524" listening={false} />
+        <Text text={el.caption} x={5} y={8} width={Math.max(10, captionWidth - 10)} height={captionHeight - 10} fontSize={13} lineHeight={1.35} fontFamily={el.fontFamily || "Cairo, Arial"} fill="#ffffff" fontStyle="bold" align="right" padding={4} listening={false} />
       </Group>}
     </Group>
   );
@@ -166,6 +170,44 @@ const VideoNode = React.memo(({ el, sel, onDE, onTE, onSelect }: { el: VideoElem
   </Group>;
 });
 
+const commentSize = (el: CommentElement) => {
+  const fontSize = el.fontSize || 22;
+  const charsPerLine = Math.max(8, Math.floor(250 / (fontSize * 0.62)));
+  const lines = Math.max(1, Math.ceil((el.text || '').length / charsPerLine));
+  return { width: Math.min(310, Math.max(130, Math.min((el.text || '').length, charsPerLine) * fontSize * .64 + 42, el.width || 0)), height: Math.max(54, lines * (fontSize * 1.38) + 30) };
+};
+
+const CommentNode = React.memo(({ el, sel, onDE, onSelect, onEdit }: { el: CommentElement; sel: boolean; onDE: any; onSelect: any; onEdit: any }) => {
+  const { width, height } = commentSize(el);
+  const style = el.style || 'speech';
+  const fill = el.fill || '#292524';
+  const common = { id: el.id, x: el.x, y: el.y, rotation: el.rotation || 0, draggable: sel, onDragEnd: onDE, onClick: onSelect, onTap: onSelect, onDblClick: onEdit, onDblTap: onEdit };
+  const text = <Text text={el.text} x={18} y={13} width={width - 36} height={height - 20} fontSize={el.fontSize} lineHeight={1.32} fontFamily={el.fontFamily || 'Cairo, Arial'} fill={el.color || '#ffffff'} align="right" verticalAlign="middle" />;
+  return <Group {...common}>
+    {style === 'cloud' && <><Circle x={width * .26} y={height * .54} radius={height * .32} fill={fill}/><Circle x={width * .5} y={height * .38} radius={height * .4} fill={fill}/><Circle x={width * .75} y={height * .55} radius={height * .33} fill={fill}/><Rect x={width * .18} y={height * .45} width={width * .64} height={height * .38} fill={fill} cornerRadius={height * .18}/></>}
+    {style === 'thought' && <><Rect width={width} height={height} fill={fill} cornerRadius={height / 2}/><Circle x={17} y={height + 10} radius={7} fill={fill}/><Circle x={6} y={height + 23} radius={4} fill={fill}/></>}
+    {style === 'note' && <><Rect width={width} height={height} fill={fill} cornerRadius={7} shadowColor="#1c1917" shadowBlur={8} shadowOpacity={.18}/><Line points={[width - 27, 0, width, 0, width, 27]} stroke="#ffffff" opacity={.35} strokeWidth={2}/></>}
+    {style === 'label' && <><Rect width={width} height={height} fill={fill} cornerRadius={10}/><Circle x={15} y={height / 2} radius={5} fill="#ffffff" opacity={.55}/></>}
+    {style === 'speech' && <><Rect width={width} height={height} fill={fill} cornerRadius={18} shadowColor="#1c1917" shadowBlur={8} shadowOpacity={.18}/><RegularPolygon x={width - 30} y={height + 2} sides={3} radius={12} rotation={180} fill={fill}/></>}
+    {text}
+  </Group>;
+});
+
+const AudioNode = React.memo(({ el, sel, onDE, onTE, onSelect }: { el: AudioElement; sel: boolean; onDE: any; onTE: any; onSelect: any }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const audio = new Audio(el.src); audio.preload = 'metadata'; audioRef.current = audio;
+    return () => { audio.pause(); audio.src = ''; };
+  }, [el.src]);
+  useEffect(() => { const audio = audioRef.current; if (!audio) return; if (el.playing) audio.play().catch(() => undefined); else audio.pause(); }, [el.playing]);
+  return <Group id={el.id} x={el.x} y={el.y} rotation={el.rotation || 0} draggable={sel} onDragEnd={onDE} onTransformEnd={onTE} onClick={onSelect} onTap={onSelect}>
+    <Rect width={el.width} height={el.height} fill="#1f2937" cornerRadius={18} shadowColor="#111827" shadowBlur={12} shadowOpacity={.22}/>
+    <Circle x={34} y={el.height / 2} radius={20} fill="#e5484d"/><RegularPolygon x={38} y={el.height / 2} sides={3} radius={9} rotation={90} fill="#ffffff"/>
+    <Text x={70} y={15} width={el.width - 94} text={el.title || 'تسجيل صوتي'} fontFamily="Cairo, Arial" fontSize={16} fontStyle="bold" fill="#ffffff" align="right"/>
+    <Rect x={72} y={44} width={Math.max(30, el.width - 110)} height={5} fill="#ffffff" opacity={.2} cornerRadius={4}/><Rect x={72} y={44} width={Math.max(24, (el.width - 110) * .36)} height={5} fill="#fca5a5" cornerRadius={4}/>
+  </Group>;
+});
+
 const StrokeNode = React.memo(({ el, sel, onDE, onSelect }: { el: StrokeElement; sel: boolean; onDE: any; onSelect: any }) => {
   const cfg = PEN_CFG[el.tool] || PEN_CFG.pen;
   const sd = getStroke(el.points.map(p => [p.x, p.y, p.pressure || 0.5]), { ...cfg, size: el.width });
@@ -195,7 +237,7 @@ const AnimatedReveal: React.FC<{ show: boolean; effect: RevealEffect; children: 
 };
 
 export const CanvasEditor: React.FC = () => {
-  const { currentTool, penColor, penWidth, activeShape, activeFont, activePageId, selectedElements, setSelectedElements, setTool, editingTextId, setEditingTextId, isPresenting, setIsPresenting } = useStore();
+  const { currentTool, penColor, penWidth, activeShape, activeFont, activeCommentStyle, activePageId, selectedElements, setSelectedElements, setTool, editingTextId, setEditingTextId, isPresenting, setIsPresenting } = useStore();
   const stageRef = useRef<any>(null);
   const transformerRef = useRef<any>(null);
   const liveLayerRef = useRef<any>(null);
@@ -205,6 +247,7 @@ export const CanvasEditor: React.FC = () => {
   const isDrawing = useRef(false);
   const livePoints = useRef<Point[]>([]);
   const liveShape = useRef<Konva.Shape | null>(null);
+  const touchGesture = useRef<{ background: boolean; x: number; y: number; distance?: number; center?: { x: number; y: number } } | null>(null);
 
   const page = useLiveQuery(() => activePageId ? db.pages.get(activePageId) : undefined, [activePageId]);
   const [elements, setElements] = useState<CanvasElement[]>([]);
@@ -239,7 +282,7 @@ export const CanvasEditor: React.FC = () => {
 
   useEffect(() => {
     if (!transformerRef.current || !stageRef.current) return;
-    const nodes = selectedElements.map(id => stageRef.current.findOne(`#${id}`)).filter(Boolean);
+    const nodes = selectedElements.filter(id => !elements.find(element => element.id === id)?.isLocked).map(id => stageRef.current.findOne(`#${id}`)).filter(Boolean);
     transformerRef.current.nodes(nodes);
     
     // Customize transformer bounds for text to allow scaling properly
@@ -262,6 +305,21 @@ export const CanvasEditor: React.FC = () => {
     setElements(newEls);
     if (activePageId) db.pages.update(activePageId, { elements: newEls, updatedAt: Date.now() });
   }, [elements, activePageId]);
+
+  useEffect(() => {
+    const addInternetImage = (event: Event) => {
+      const detail = (event as CustomEvent<{ src?: string; title?: string }>).detail;
+      if (!detail?.src) return;
+      const width = 280;
+      const x = (sz.w / 2 - stagePos.x) / stageScale - width / 2;
+      const y = (sz.h / 2 - stagePos.y) / stageScale - 120;
+      const image: CanvasElement = { id: uuidv4(), type: 'image', x, y, width, height: 220, src: detail.src, cropShape: 'rounded', borderWidth: 3, borderColor: '#ffffff', borderStyle: 'shadow' };
+      saveState([...elements, image]);
+      setTool('select'); setSelectedElements([image.id]);
+    };
+    window.addEventListener('canvas-add-image', addInternetImage);
+    return () => window.removeEventListener('canvas-add-image', addInternetImage);
+  }, [elements, saveState, setSelectedElements, setTool, stagePos, stageScale, sz]);
 
   const undo = useCallback(() => {
     if (!undoStack.length) return;
@@ -353,6 +411,11 @@ export const CanvasEditor: React.FC = () => {
     if (currentTool === 'text') {
       const t: CanvasElement = { id: uuidv4(), type: 'text', text: 'اكتب هنا...', fontFamily: activeFont, fontSize: 32, color: penColor, align: 'center', x: pos.x - 100, y: pos.y, width: 200 };
       saveState([...elements, t]); setTool('select'); setSelectedElements([t.id]); setEditingTextId(t.id); return;
+    }
+
+    if (currentTool === 'comment') {
+      const comment: CanvasElement = { id: uuidv4(), type: 'comment', text: 'اكتب تعليقك...', fontFamily: activeFont, fontSize: 21, color: '#ffffff', fill: penColor, style: activeCommentStyle, x: pos.x - 105, y: pos.y - 26, width: 210 };
+      saveState([...elements, comment]); setTool('select'); setSelectedElements([comment.id]); setEditingTextId(comment.id); return;
     }
 
     if (isDraw) {
@@ -462,6 +525,50 @@ export const CanvasEditor: React.FC = () => {
     setStagePos({ x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale });
   };
 
+  const handleTouchStart = (e: any) => {
+    if (isPresenting) return;
+    const touches = e.evt?.touches as TouchList | undefined;
+    if (!touches?.length) return;
+    const isBackground = e.target === e.target.getStage() || e.target.name() === 'background';
+    if (touches.length >= 2) {
+      const [a, b] = [touches[0], touches[1]];
+      touchGesture.current = { background: true, x: 0, y: 0, distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), center: { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 } };
+    } else if (isBackground && !isDraw && !isEraser && !isLasso && currentTool !== 'shape' && currentTool !== 'text' && currentTool !== 'comment') {
+      touchGesture.current = { background: true, x: touches[0].clientX, y: touches[0].clientY };
+    }
+  };
+
+  const handleTouchMove = (e: any) => {
+    const gesture = touchGesture.current;
+    const touches = e.evt?.touches as TouchList | undefined;
+    const stage = stageRef.current;
+    if (!gesture || !touches?.length || !stage) return;
+    if (touches.length >= 2 && gesture.distance) {
+      e.evt.preventDefault();
+      const [a, b] = [touches[0], touches[1]];
+      const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const center = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+      const oldScale = stage.scaleX();
+      const newScale = Math.min(4, Math.max(.25, oldScale * (distance / gesture.distance)));
+      const previous = gesture.center || center;
+      const point = { x: (previous.x - stage.x()) / oldScale, y: (previous.y - stage.y()) / oldScale };
+      setStageScale(newScale);
+      setStagePos({ x: center.x - point.x * newScale, y: center.y - point.y * newScale });
+      gesture.distance = distance; gesture.center = center;
+      return;
+    }
+    if (gesture.background && touches.length === 1) {
+      e.evt.preventDefault();
+      const touch = touches[0];
+      setStagePos(position => ({ x: position.x + touch.clientX - gesture.x, y: position.y + touch.clientY - gesture.y }));
+      gesture.x = touch.clientX; gesture.y = touch.clientY;
+    }
+  };
+
+  const handleTouchEnd = (e: any) => {
+    if (!e.evt?.touches?.length) touchGesture.current = null;
+  };
+
   const handleDragEnd = (e: any) => {
     const id = getElementId(e.target);
     if (id) saveState(elements.map(el => el.id === id ? { ...el, x: e.target.x(), y: e.target.y() } : el));
@@ -470,6 +577,8 @@ export const CanvasEditor: React.FC = () => {
   const handleCaptionDrag = (id: string, captionX: number, captionY: number) => {
     saveState(elements.map(el => el.id === id && el.type === 'image' ? { ...el, captionX, captionY } : el));
   };
+
+  const toggleLock = (id: string) => saveState(elements.map(element => element.id === id ? { ...element, isLocked: !element.isLocked } : element));
   
   const handleTransformEnd = (e: any) => {
     const n = e.target; const id = getElementId(n);
@@ -484,7 +593,7 @@ export const CanvasEditor: React.FC = () => {
         const newWidth = Math.max(50, ((el as any).width || 200) * sx);
         return { ...el, x: n.x(), y: n.y(), rotation: n.rotation(), fontSize: newFontSize, width: newWidth };
       }
-      if (el.type === 'image' || el.type === 'shape' || el.type === 'video') {
+      if (el.type === 'image' || el.type === 'shape' || el.type === 'video' || el.type === 'audio') {
         return { ...el, x: n.x(), y: n.y(), rotation: n.rotation(), width: Math.max(10, el.width * sx), height: Math.max(10, el.height * sy) };
       }
       return { ...el, x: n.x(), y: n.y(), rotation: n.rotation() };
@@ -514,31 +623,42 @@ export const CanvasEditor: React.FC = () => {
         x={stagePos.x} y={stagePos.y} scaleX={stageScale} scaleY={stageScale}
         draggable={isPan && !isPresenting} onDragEnd={(e) => { if (e.target === stageRef.current) setStagePos({ x: e.target.x(), y: e.target.y() }); }}
         onWheel={handleWheel}
-        onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}>
+        onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
+        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
         
         <Layer listening={true}><BgLayer bg={page?.background || { type: 'dots', value: '#fff' }} /></Layer>
         
         <Layer>
           {elements.map((el, index) => {
             let node: React.ReactNode = null;
-            if (el.type === 'stroke') node = <StrokeNode el={el} sel={sel} onDE={handleDragEnd} onSelect={handleElementSelect} />;
+            const selectable = sel && !el.isLocked;
+            if (el.type === 'stroke') node = <StrokeNode el={el} sel={selectable} onDE={handleDragEnd} onSelect={handleElementSelect} />;
             
             if (el.type === 'shape') {
               const s = el as ShapeElement;
-              const props = { id: s.id, x: s.x, y: s.y, rotation: s.rotation || 0, draggable: sel, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd, onClick: handleElementSelect, onTap: handleElementSelect };
+              const props = { id: s.id, x: s.x, y: s.y, rotation: s.rotation || 0, draggable: selectable, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd, onClick: handleElementSelect, onTap: handleElementSelect };
               const style = { fill: s.fill === 'transparent' ? undefined : s.fill, stroke: s.stroke || s.fill, strokeWidth: s.strokeWidth || 0 };
               if (s.shapeType === 'rectangle') node = <Rect {...props} width={s.width} height={s.height} {...style} cornerRadius={8} />;
               if (s.shapeType === 'circle') node = <Circle {...props} radius={s.width / 2} {...style} />;
+              if (s.shapeType === 'ellipse') node = <Ellipse {...props} x={s.x + s.width / 2} y={s.y + s.height / 2} radiusX={s.width / 2} radiusY={s.height / 2} {...style} />;
               if (s.shapeType === 'triangle') node = <RegularPolygon {...props} sides={3} radius={s.width / 2} {...style} />;
               if (s.shapeType === 'line') node = <Line {...props} points={[0, 0, s.width, s.height]} stroke={s.stroke} strokeWidth={s.strokeWidth} />;
               if (s.shapeType === 'arrow') node = <Arrow {...props} points={[0, 0, s.width, s.height]} stroke={s.stroke} fill={s.stroke} strokeWidth={s.strokeWidth} pointerLength={10} pointerWidth={10} />;
+              if (s.shapeType === 'diamond') node = <RegularPolygon {...props} x={s.x + s.width / 2} y={s.y + s.height / 2} sides={4} radius={s.width / 2} rotation={45} {...style} />;
+              if (s.shapeType === 'star') node = <Star {...props} x={s.x + s.width / 2} y={s.y + s.height / 2} numPoints={5} innerRadius={s.width * .2} outerRadius={s.width / 2} {...style} />;
+              if (s.shapeType === 'heart') node = <Path {...props} data="M 50 91 C 12 62 4 42 10 25 C 17 7 40 8 50 25 C 60 8 83 7 90 25 C 96 42 88 62 50 91 Z" scaleX={s.width / 100} scaleY={s.height / 100} {...style} />;
+              if (s.shapeType === 'sticky') node = <Group {...props}><Rect width={s.width} height={s.height} fill={style.fill} stroke={style.stroke} strokeWidth={style.strokeWidth} cornerRadius={7}/><Line points={[s.width - 28, 0, s.width, 0, s.width, 28]} stroke="#ffffff" opacity={.42} strokeWidth={2}/></Group>;
+              if (s.shapeType === 'speech') node = <Group {...props}><Rect width={s.width} height={s.height} fill={style.fill} stroke={style.stroke} strokeWidth={style.strokeWidth} cornerRadius={18}/><RegularPolygon x={s.width - 25} y={s.height + 1} sides={3} radius={12} rotation={180} fill={style.fill} stroke={style.stroke} strokeWidth={style.strokeWidth}/></Group>;
             }
             
-            if (el.type === 'image') node = <ImgNode el={el} sel={sel} onDE={handleDragEnd} onTE={handleTransformEnd} onSelect={handleElementSelect} onCaptionDrag={handleCaptionDrag} />;
-            if (el.type === 'video') node = <VideoNode el={el as VideoElement} sel={sel} onDE={handleDragEnd} onTE={handleTransformEnd} onSelect={handleElementSelect} />;
-            if (el.type === 'text') node = <Text id={el.id} x={el.x} y={el.y} text={el.text} align={el.align || 'center'} fontSize={el.fontSize} fontFamily={el.fontFamily} fill={el.color} width={el.width} rotation={el.rotation || 0} draggable={sel} onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd} onClick={handleElementSelect} onTap={handleElementSelect} onDblClick={() => setEditingTextId(el.id)} onDblTap={() => setEditingTextId(el.id)} />;
+            if (el.type === 'image') node = <ImgNode el={el} sel={selectable} onDE={handleDragEnd} onTE={handleTransformEnd} onSelect={handleElementSelect} onCaptionDrag={handleCaptionDrag} />;
+            if (el.type === 'video') node = <VideoNode el={el as VideoElement} sel={selectable} onDE={handleDragEnd} onTE={handleTransformEnd} onSelect={handleElementSelect} />;
+            if (el.type === 'audio') node = <AudioNode el={el as AudioElement} sel={selectable} onDE={handleDragEnd} onTE={handleTransformEnd} onSelect={handleElementSelect} />;
+            if (el.type === 'comment') node = <CommentNode el={el as CommentElement} sel={selectable} onDE={handleDragEnd} onSelect={handleElementSelect} onEdit={() => setEditingTextId(el.id)} />;
+            if (el.type === 'text') node = <Text id={el.id} x={el.x} y={el.y} text={el.text} align={el.align || 'center'} fontSize={el.fontSize} fontFamily={el.fontFamily} fill={el.color} width={el.width} rotation={el.rotation || 0} draggable={selectable} onDragEnd={handleDragEnd} onTransformEnd={handleTransformEnd} onClick={handleElementSelect} onTap={handleElementSelect} onDblClick={() => setEditingTextId(el.id)} onDblTap={() => setEditingTextId(el.id)} />;
             return isPresenting ? <AnimatedReveal key={el.id} show={index < presentationStep} effect={revealEffect}>{node}</AnimatedReveal> : <React.Fragment key={el.id}>{node}</React.Fragment>;
           })}
+          {elements.filter(element => element.isLocked && selectedElements.includes(element.id)).map(element => <Group key={`lock-${element.id}`} x={element.x} y={element.y - 38} onClick={(event) => { event.cancelBubble = true; toggleLock(element.id); }} onTap={(event) => { event.cancelBubble = true; toggleLock(element.id); }}><Rect width={36} height={30} fill="#292524" cornerRadius={10} shadowColor="#000" shadowBlur={8} shadowOpacity={.22}/><Text text="🔒" width={36} height={30} align="center" verticalAlign="middle" fontSize={16}/></Group>)}
           {sel && <Transformer ref={transformerRef} anchorCornerRadius={4} anchorFill="#fff" anchorStroke="#ef4444" borderStroke="#ef4444" borderDash={[4, 2]} boundBoxFunc={(o, n) => (n.width < 10 || n.height < 10) ? o : n} />}
         </Layer>
         <Layer ref={liveLayerRef} />
@@ -574,9 +694,15 @@ export const CanvasEditor: React.FC = () => {
         if (!el) return null;
         const screenX = el.x * stageScale + stagePos.x;
         const screenY = el.y * stageScale + stagePos.y;
-        return <textarea autoFocus className="absolute border-2 border-red-400 rounded-lg outline-none resize-none z-50 p-2 bg-white shadow-xl text-right" dir="rtl"
-          style={{ top: screenY, left: screenX, width: Math.max(200, el.width) * stageScale, minHeight: 60 * stageScale, fontSize: el.fontSize * stageScale, fontFamily: el.fontFamily, color: el.color, textAlign: el.align || 'center' }}
-          defaultValue={el.text} onBlur={(ev) => { const id = editingTextId; setEditingTextId(null); if (id) saveState(elements.map(e => e.id === id ? { ...e, text: ev.target.value } : e)); }} />;
+        const dimensions = el.type === 'comment' ? commentSize(el as CommentElement) : { width: Math.max(200, el.width), height: Math.max(60, el.height || 60) };
+        return <div contentEditable suppressContentEditableWarning role="textbox" aria-label="اكتب مباشرة على الصفحة" dir="auto"
+          ref={(node) => { if (!node || node.dataset.focused) return; node.dataset.focused = 'true'; requestAnimationFrame(() => { node.focus(); const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(node); selection?.removeAllRanges(); selection?.addRange(range); }); }}
+          className="absolute z-50 whitespace-pre-wrap break-words outline-none"
+          style={{ top: screenY, left: screenX, width: dimensions.width * stageScale, minHeight: dimensions.height * stageScale, padding: `${Math.max(0, 8 * stageScale)}px`, background: 'transparent', border: 'none', boxShadow: 'none', fontSize: el.fontSize * stageScale, lineHeight: 1.32, fontFamily: el.fontFamily, color: el.type === 'comment' ? el.color : el.color, textAlign: el.align || 'center', caretColor: el.type === 'comment' ? el.color : el.color }}
+          onInput={(event) => { const text = event.currentTarget.innerText.replace(/\n$/, ''); setElements(current => current.map(item => item.id === el.id ? { ...item, text } as CanvasElement : item)); }}
+          onKeyDown={(event) => { if (event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.key === 'Enter')) (event.currentTarget as HTMLDivElement).blur(); }}
+          onBlur={(event) => { const id = editingTextId; const text = event.currentTarget.innerText.replace(/\n$/, ''); setEditingTextId(null); if (id) { const next = elements.map(item => item.id === id ? { ...item, text } as CanvasElement : item); setElements(next); if (activePageId) db.pages.update(activePageId, { elements: next, updatedAt: Date.now() }); } }}
+        >{el.text}</div>;
       })()}
 
     </div>

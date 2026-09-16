@@ -1,4 +1,4 @@
-export type ToolType = 'select' | 'pan' | 'pen' | 'pencil' | 'brush' | 'calligraphy' | 'highlighter' | 'eraser' | 'lasso' | 'text' | 'image' | 'shape';
+export type ToolType = 'select' | 'pan' | 'pen' | 'pencil' | 'brush' | 'calligraphy' | 'highlighter' | 'eraser' | 'lasso' | 'text' | 'image' | 'shape' | 'comment';
 
 export interface Point {
   x: number;
@@ -37,6 +37,20 @@ export interface TextElement extends BaseElement {
   align?: 'left' | 'center' | 'right';
 }
 
+export type CommentStyle = 'speech' | 'note' | 'cloud' | 'label' | 'thought';
+
+/** A free-standing comment that can be placed anywhere, not only on top of an image. */
+export interface CommentElement extends BaseElement {
+  type: 'comment';
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  fill: string;
+  style: CommentStyle;
+  width?: number;
+}
+
 export type MediaFrameStyle = 'solid' | 'dashed' | 'double' | 'polaroid' | 'neon' | 'film' | 'cinema' | 'tape' | 'shadow';
 
 export interface ImageElement extends BaseElement {
@@ -69,9 +83,20 @@ export interface VideoElement extends BaseElement {
   borderStyle?: MediaFrameStyle;
 }
 
+export interface AudioElement extends BaseElement {
+  type: 'audio';
+  src: string;
+  width: number;
+  height: number;
+  title?: string;
+  playing?: boolean;
+}
+
+export type ShapeType = 'rectangle' | 'circle' | 'ellipse' | 'triangle' | 'line' | 'arrow' | 'diamond' | 'star' | 'heart' | 'sticky' | 'speech';
+
 export interface ShapeElement extends BaseElement {
   type: 'shape';
-  shapeType: 'rectangle' | 'circle' | 'ellipse' | 'triangle' | 'line' | 'arrow';
+  shapeType: ShapeType;
   width: number;
   height: number;
   fill?: string;
@@ -79,7 +104,7 @@ export interface ShapeElement extends BaseElement {
   strokeWidth?: number;
 }
 
-export type CanvasElement = StrokeElement | TextElement | ImageElement | VideoElement | ShapeElement;
+export type CanvasElement = StrokeElement | TextElement | CommentElement | ImageElement | VideoElement | AudioElement | ShapeElement;
 
 export interface Page {
   id: string;
@@ -91,6 +116,8 @@ export interface Page {
     type: 'color' | 'grid' | 'lines' | 'dots' | 'dark' | 'cream';
     value: string;
   };
+  /** Selected visual cover on the notebook shelf. Old notes keep the default cover. */
+  cover?: string;
   createdAt: number;
   updatedAt: number;
 }

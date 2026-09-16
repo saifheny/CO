@@ -2,11 +2,12 @@ import React, { useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
   Pen, Pencil, Paintbrush, Highlighter, Eraser, MousePointer2, Type, Image as ImageIcon, Shapes,
-  Undo, Redo, Home, LassoSelect, Hand, MoreHorizontal, Play, Minus, Plus, RotateCcw, Video
+  Undo, Redo, Home, LassoSelect, Hand, MoreHorizontal, Play, Minus, Plus, RotateCcw, Video, MessageCircle, Mic, SmilePlus
 } from 'lucide-react';
 import clsx from 'clsx';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/db';
+import { StickerLibrary } from './StickerLibrary';
 
 const COLORS = ['#000000','#374151','#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb','#7c3aed','#db2777'];
 const FONTS = [
@@ -18,17 +19,30 @@ const FONTS = [
 const SHAPES_LIST = [
   { id: 'rectangle', label: 'مستطيل', icon: '▭' },
   { id: 'circle', label: 'دائرة', icon: '○' },
+  { id: 'ellipse', label: 'بيضاوي', icon: '⬭' },
   { id: 'triangle', label: 'مثلث', icon: '△' },
   { id: 'line', label: 'خط', icon: '─' },
   { id: 'arrow', label: 'سهم', icon: '→' },
+  { id: 'diamond', label: 'ماسة', icon: '◇' },
+  { id: 'star', label: 'نجمة', icon: '★' },
+  { id: 'heart', label: 'قلب', icon: '♥' },
+  { id: 'sticky', label: 'ملصق', icon: '▣' },
+  { id: 'speech', label: 'فقاعة', icon: '◒' },
 ];
 
+const COMMENT_STYLES = [
+  { id: 'speech', label: 'فقاعة', icon: '◒' }, { id: 'note', label: 'ملصق', icon: '▣' }, { id: 'cloud', label: 'سحابة', icon: '☁' }, { id: 'label', label: 'عنوان', icon: '▰' }, { id: 'thought', label: 'فكرة', icon: '◌' },
+] as const;
+
 export function Toolbar() {
-  const { currentTool, setTool, penColor, setPenColor, penWidth, setPenWidth, setView, activePageId, activeFont, setActiveFont, activeShape, setActiveShape, setIsPresenting } = useStore();
+  const { currentTool, setTool, penColor, setPenColor, penWidth, setPenWidth, setView, activePageId, activeFont, setActiveFont, activeCommentStyle, setActiveCommentStyle, activeShape, setActiveShape, setIsPresenting } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [shapeWheelOpen, setShapeWheelOpen] = useState(false);
+  const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
 
   const handleUndo = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
   const handleRedo = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }));
@@ -76,8 +90,21 @@ export function Toolbar() {
     if (videoRef.current) videoRef.current.value = '';
   };
 
+  const handleAudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activePageId) return;
+    const src = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file);
+    });
+    const page = await db.pages.get(activePageId);
+    if (!page) return;
+    await db.pages.update(activePageId, { elements: [...page.elements, { id: uuidv4(), type: 'audio', x: 190, y: 210, width: 310, height: 74, src, title: file.name.replace(/\.[^/.]+$/, ''), playing: false }] as any, updatedAt: Date.now() });
+    setTool('select');
+    if (audioRef.current) audioRef.current.value = '';
+  };
+
   const isPenLike = ['pen','pencil','brush','calligraphy','highlighter'].includes(currentTool);
-  const hasOptions = isPenLike || currentTool === 'text' || currentTool === 'shape';
+  const hasOptions = isPenLike || currentTool === 'text' || currentTool === 'shape' || currentTool === 'comment';
 
   const Tool = ({ id, icon: Icon, tip }: { id: string; icon: any; tip: string }) => {
     const active = currentTool === id;
@@ -133,10 +160,15 @@ export function Toolbar() {
 
           {/* Insert Group */}
           <Tool id="text" icon={Type} tip="اكتب" />
-          
-          {/* Shapes: selecting this opens a dedicated third toolbar below the colours. */}
+          <Tool id="comment" icon={MessageCircle} tip="تعليق منفصل" />
+
           <div className="relative">
-            <button onClick={() => setTool('shape')} title="اختار شكل"
+            <button onClick={() => setImageLibraryOpen(true)} title="صور وملصقات من الإنترنت" aria-label="صور وملصقات من الإنترنت" className={clsx('w-9 h-9 flex items-center justify-center rounded-xl transition-all', imageLibraryOpen ? 'bg-[#e5484d] text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-stone-100')}><SmilePlus size={18}/></button>
+          </div>
+          
+          {/* Shapes live in a compact circular picker so the main bar stays uncluttered. */}
+          <div className="relative">
+            <button onClick={() => { setTool('shape'); setShapeWheelOpen(open => !open); }} title="اختار شكل"
               className={clsx("w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 gap-0",
                 currentTool === 'shape' ? "bg-[#e5484d] text-white" : "text-gray-500 hover:text-gray-800 hover:bg-stone-100")}>
               <Shapes size={16} />
@@ -153,6 +185,8 @@ export function Toolbar() {
           <input type="file" accept="image/*" className="hidden" ref={fileRef} onChange={handleImg} />
           <button onClick={() => videoRef.current?.click()} title="حط فيديو" aria-label="حط فيديو" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl text-gray-500 hover:text-[#e5484d] hover:bg-red-50 transition-all"><Video size={18}/></button>
           <input type="file" accept="video/*" className="hidden" ref={videoRef} onChange={handleVideo} />
+          <button onClick={() => audioRef.current?.click()} title="أضف تسجيل صوتي" aria-label="أضف تسجيل صوتي" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl text-gray-500 hover:text-[#e5484d] hover:bg-red-50 transition-all"><Mic size={18}/></button>
+          <input type="file" accept="audio/*" className="hidden" ref={audioRef} onChange={handleAudio} />
 
           <div className="w-px h-6 bg-gray-200 mx-0.5" />
 
@@ -165,13 +199,14 @@ export function Toolbar() {
           <button onClick={() => zoom(0.15)} title="كبّر" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-stone-100"><Plus size={16}/></button>
           <button onClick={() => setCollapsed(true)} title="صغّر الأدوات" className="toolbar-action w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:bg-stone-100"><MoreHorizontal size={17}/></button>
         </div>
+        <div className="sm:hidden -mt-1 flex items-center gap-1 rounded-full bg-white/75 px-2 py-1 text-[9px] font-bold text-stone-400 shadow-sm"><span className="text-xs text-[#e5484d]">←</span> اسحب لرؤية أدوات أكثر</div>
 
         {/* ── Sub Options Bar ── */}
         {hasOptions && (
           <div className="app-horizontal-scroll flex w-max max-w-[calc(100vw-12px)] flex-nowrap items-center gap-3 overflow-x-auto rounded-2xl border border-stone-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-xl">
             
             {/* Font picker (text only) */}
-            {currentTool === 'text' && (
+             {currentTool === 'text' && (
               <>
                 <select value={activeFont} onChange={e => setActiveFont(e.target.value)}
                   className="bg-transparent border-none text-sm font-semibold text-gray-700 outline-none cursor-pointer pr-1" style={{ fontFamily: activeFont }}>
@@ -179,9 +214,11 @@ export function Toolbar() {
                 </select>
                 <div className="w-px h-5 bg-gray-200" />
               </>
-            )}
+             )}
 
-            {/* Colors */}
+             {currentTool === 'comment' && <div className="flex items-center gap-1.5"><span className="shrink-0 text-[11px] font-bold text-stone-400">شكل التعليق</span>{COMMENT_STYLES.map(style => <button key={style.id} onClick={() => setActiveCommentStyle(style.id)} className={clsx('flex shrink-0 items-center gap-1 rounded-xl border px-2 py-1.5 text-[11px] font-bold transition-colors', activeCommentStyle === style.id ? 'border-[#e5484d] bg-[#fff2f2] text-[#c7373c]' : 'border-stone-200 text-stone-600 hover:bg-stone-50')}><span>{style.icon}</span>{style.label}</button>)}</div>}
+
+             {/* Colors */}
             <div className="flex items-center gap-1">
               {COLORS.map(c => (
                 <button key={c} onClick={() => setPenColor(c)}
@@ -210,12 +247,10 @@ export function Toolbar() {
             )}
           </div>
         )}
-        {currentTool === 'shape' && <div className="app-horizontal-scroll flex w-max max-w-[calc(100vw-12px)] flex-nowrap items-center gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white/95 px-3 py-2 shadow-sm" aria-label="اختار نوع الشكل">
-          <span className="shrink-0 text-[11px] font-bold text-stone-400">الأشكال</span>
-          {SHAPES_LIST.map(s => <button key={s.id} onClick={() => { setActiveShape(s.id as any); setTool('shape'); }} className={clsx('flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors', activeShape === s.id ? 'border-[#e5484d] bg-[#fff2f2] text-[#c7373c]' : 'border-stone-200 text-stone-600 hover:bg-stone-50')}><span className="text-base leading-none">{s.icon}</span>{s.label}</button>)}
-        </div>}
+        {currentTool === 'shape' && shapeWheelOpen && <div className="relative mt-1 rounded-[30px] border border-stone-200 bg-white/95 p-3 shadow-xl backdrop-blur-xl" aria-label="اختار نوع الشكل"><div className="mb-2 flex items-center justify-between gap-4 px-1"><span className="text-[11px] font-bold text-stone-400">دائرة الأشكال</span><span className="text-[10px] text-stone-400">اختار الشكل ثم حطه في الصفحة</span></div><div className="grid grid-cols-6 gap-1.5 sm:grid-cols-11">{SHAPES_LIST.map(s => <button key={s.id} onClick={() => { setActiveShape(s.id as any); setTool('shape'); setShapeWheelOpen(false); }} className={clsx('grid aspect-square min-w-10 place-items-center rounded-full border text-lg transition-all', activeShape === s.id ? 'border-[#e5484d] bg-[#fff2f2] text-[#c7373c] shadow-sm' : 'border-stone-200 text-stone-600 hover:-translate-y-0.5 hover:bg-stone-50')} title={s.label} aria-label={s.label}>{s.icon}</button>)}</div></div>}
         </>}
       </div>
+      {imageLibraryOpen && <StickerLibrary onClose={() => setImageLibraryOpen(false)} />}
     </>
   );
 }
