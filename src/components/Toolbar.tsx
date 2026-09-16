@@ -1,15 +1,20 @@
 import React, { useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import {
-  Pen, Highlighter, Eraser, MousePointer2, Type, Image as ImageIcon, Shapes,
-  Undo, Redo, Home, LassoSelect, Hand, ChevronDown, Play
+  Pen, Pencil, Paintbrush, Highlighter, Eraser, MousePointer2, Type, Image as ImageIcon, Shapes,
+  Undo, Redo, Home, LassoSelect, Hand, MoreHorizontal, Play, Minus, Plus, RotateCcw, Video
 } from 'lucide-react';
 import clsx from 'clsx';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/db';
 
 const COLORS = ['#000000','#374151','#dc2626','#ea580c','#ca8a04','#16a34a','#2563eb','#7c3aed','#db2777'];
-const FONTS = ['Cairo','Tajawal','Almarai','Amiri','Poppins','Arial','Times New Roman'];
+const FONTS = [
+  { name: 'Cairo', label: 'القاهرة' }, { name: 'Tajawal', label: 'تجوال' }, { name: 'Almarai', label: 'المراعي' },
+  { name: 'Amiri', label: 'أميري' }, { name: 'Reem Kufi', label: 'ريم كوفي' }, { name: 'Noto Naskh Arabic', label: 'نسخ عربي' }, { name: 'Noto Kufi Arabic', label: 'كوفى عربي' },
+  { name: 'Changa', label: 'تشانجا' }, { name: 'El Messiri', label: 'المسيري' }, { name: 'IBM Plex Sans Arabic', label: 'IBM عربي' }, { name: 'Marhey', label: 'مرحي' }, { name: 'Lalezar', label: 'لاله زار' },
+  { name: 'Poppins', label: 'Poppins' }, { name: 'DM Sans', label: 'DM Sans' }, { name: 'Montserrat', label: 'Montserrat' }, { name: 'Nunito', label: 'Nunito' }, { name: 'Playfair Display', label: 'Playfair' }, { name: 'Arial', label: 'Arial' },
+];
 const SHAPES_LIST = [
   { id: 'rectangle', label: 'مستطيل', icon: '▭' },
   { id: 'circle', label: 'دائرة', icon: '○' },
@@ -21,11 +26,14 @@ const SHAPES_LIST = [
 export function Toolbar() {
   const { currentTool, setTool, penColor, setPenColor, penWidth, setPenWidth, setView, activePageId, activeFont, setActiveFont, activeShape, setActiveShape, setIsPresenting } = useStore();
   const fileRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef<HTMLInputElement>(null);
-  const [showShapes, setShowShapes] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleUndo = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
   const handleRedo = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }));
+  const zoom = (amount: number) => window.dispatchEvent(new CustomEvent('canvas-zoom', { detail: amount }));
+  const resetZoom = () => window.dispatchEvent(new CustomEvent('canvas-reset'));
 
   const handleImg = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -50,7 +58,26 @@ export function Toolbar() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  const handleVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activePageId) return;
+    const src = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file);
+    });
+    const video = document.createElement('video');
+    video.preload = 'metadata'; video.src = src;
+    video.onloadedmetadata = async () => {
+      const page = await db.pages.get(activePageId); if (!page) return;
+      const width = Math.min(video.videoWidth || 480, 560);
+      const height = Math.max(120, width / (video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9));
+      await db.pages.update(activePageId, { elements: [...page.elements, { id: uuidv4(), type: 'video', x: 180, y: 180, width, height, src, muted: false, playing: false }] as any, updatedAt: Date.now() });
+      setTool('select');
+    };
+    if (videoRef.current) videoRef.current.value = '';
+  };
+
   const isPenLike = ['pen','pencil','brush','calligraphy','highlighter'].includes(currentTool);
+  const hasOptions = isPenLike || currentTool === 'text' || currentTool === 'shape';
 
   const Tool = ({ id, icon: Icon, tip }: { id: string; icon: any; tip: string }) => {
     const active = currentTool === id;
@@ -58,8 +85,8 @@ export function Toolbar() {
       <div className="relative group/tool">
         <button onClick={() => setTool(id as any)} aria-label={tip}
           className={clsx(
-          "w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150",
-          active ? "bg-red-500 text-white shadow-lg shadow-red-500/25 scale-105" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+          "toolbar-action w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150",
+          active ? "bg-[#e5484d] text-white" : "text-gray-500 hover:text-gray-800 hover:bg-stone-100"
         )}>
         <Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
         </button>
@@ -71,87 +98,84 @@ export function Toolbar() {
   return (
     <>
       {/* ── Main Floating Toolbar ── */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2" style={{ fontFamily: 'Cairo, system-ui, sans-serif' }}>
-        <div className="flex items-center gap-1 bg-white/95 backdrop-blur-2xl border border-gray-200/80 rounded-[18px] px-2 py-1.5 shadow-lg shadow-black/[0.06]">
+      <div className="toolbar-shell fixed top-3 left-1/2 -translate-x-1/2 z-50 flex max-w-[calc(100vw-12px)] flex-col items-center gap-2" style={{ fontFamily: 'Cairo, system-ui, sans-serif' }}>
+        {collapsed ? <button onClick={() => setCollapsed(false)} aria-label="ورّي الأدوات" className="toolbar-action flex h-11 w-11 items-center justify-center rounded-2xl border border-stone-200 bg-white text-stone-700 shadow-lg hover:bg-stone-50"><MoreHorizontal size={20} /></button> : <>
+        {/* Desktop hugs the tools; mobile/tablet keeps one row and scrolls sideways without a visible rail. */}
+        <div className="app-horizontal-scroll flex w-max max-w-[calc(100vw-12px)] flex-nowrap items-center gap-0.5 overflow-x-auto rounded-[18px] border border-stone-200 bg-white/95 px-2 py-1.5 shadow-sm backdrop-blur-xl">
           
           {/* Home */}
-          <button onClick={() => setView('home')} title="الرئيسية"
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all">
+          <button onClick={() => setView('home')} title="نوتاتك"
+            className="w-9 h-9 flex shrink-0 items-center justify-center rounded-xl text-gray-400 hover:text-[#e5484d] hover:bg-red-50 transition-all">
             <Home size={18} />
           </button>
-          <button onClick={() => setIsPresenting(true)} title="تشغيل العرض" aria-label="تشغيل العرض"
-            className="w-9 h-9 flex items-center justify-center rounded-xl text-[#e5484d] bg-red-50 hover:bg-red-100 transition-all">
+          <button onClick={() => setIsPresenting(true)} title="شغّل العرض" aria-label="شغّل العرض"
+            className="w-9 h-9 flex shrink-0 items-center justify-center rounded-xl text-[#e5484d] bg-red-50 hover:bg-red-100 transition-all">
             <Play size={17} fill="currentColor" />
           </button>
 
           <div className="w-px h-6 bg-gray-200 mx-0.5" />
 
           {/* Selection Group */}
-          <Tool id="pan" icon={Hand} tip="تحريك الصفحة" />
-          <Tool id="select" icon={MousePointer2} tip="تحديد" />
+          <Tool id="pan" icon={Hand} tip="حرّك الورقة" />
+          <Tool id="select" icon={MousePointer2} tip="اختار" />
 
           <div className="w-px h-6 bg-gray-200 mx-0.5" />
 
           {/* Drawing Group */}
           <Tool id="pen" icon={Pen} tip="قلم حبر" />
-          <Tool id="highlighter" icon={Highlighter} tip="هايلايتر" />
-          <Tool id="eraser" icon={Eraser} tip="ممحاة" />
-          <Tool id="lasso" icon={LassoSelect} tip="تحديد حر" />
+          <Tool id="pencil" icon={Pencil} tip="قلم رصاص" />
+          <Tool id="brush" icon={Paintbrush} tip="فرشة" />
+          <Tool id="highlighter" icon={Highlighter} tip="قلم تظليل" />
+          <Tool id="eraser" icon={Eraser} tip="استيكة" />
+          <Tool id="lasso" icon={LassoSelect} tip="اختار بحرية" />
 
           <div className="w-px h-6 bg-gray-200 mx-0.5" />
 
           {/* Insert Group */}
-          <Tool id="text" icon={Type} tip="نص" />
+          <Tool id="text" icon={Type} tip="اكتب" />
           
-          {/* Shapes */}
+          {/* Shapes: selecting this opens a dedicated third toolbar below the colours. */}
           <div className="relative">
-            <button onClick={() => { setTool('shape'); setShowShapes(p => !p); }} title="أشكال"
+            <button onClick={() => setTool('shape')} title="اختار شكل"
               className={clsx("w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-150 gap-0",
-                currentTool === 'shape' ? "bg-red-500 text-white shadow-lg shadow-red-500/25" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100")}>
+                currentTool === 'shape' ? "bg-[#e5484d] text-white" : "text-gray-500 hover:text-gray-800 hover:bg-stone-100")}>
               <Shapes size={16} />
-              <ChevronDown size={10} className="ml-[-2px]" />
+              <MoreHorizontal size={10} className="ml-[-2px]" />
             </button>
-            {showShapes && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowShapes(false)} />
-                <div className="absolute top-full mt-2 right-0 bg-white rounded-xl border border-gray-200 shadow-xl p-1.5 min-w-[120px] z-50">
-                  {SHAPES_LIST.map(s => (
-                    <button key={s.id} onClick={() => { setActiveShape(s.id as any); setTool('shape'); setShowShapes(false); }}
-                      className={clsx("w-full text-right px-3 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors",
-                        activeShape === s.id ? 'bg-red-50 text-red-600 font-bold' : 'text-gray-600 hover:bg-gray-50')}>
-                      <span className="text-base">{s.icon}</span> {s.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
           </div>
 
           <div className="relative group/tool">
-            <button onClick={() => fileRef.current?.click()} aria-label="إدراج صورة" className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-[#e5484d] hover:bg-red-50 transition-all">
+            <button onClick={() => fileRef.current?.click()} aria-label="حط صورة" className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-500 hover:text-[#e5484d] hover:bg-red-50 transition-all">
               <ImageIcon size={18} />
             </button>
-            <span className="pointer-events-none absolute top-[calc(100%+9px)] right-1/2 translate-x-1/2 whitespace-nowrap rounded-lg bg-stone-800 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover/tool:opacity-100">إدراج صورة</span>
+            <span className="pointer-events-none absolute top-[calc(100%+9px)] right-1/2 translate-x-1/2 whitespace-nowrap rounded-lg bg-stone-800 px-2 py-1 text-[10px] font-bold text-white opacity-0 shadow-lg transition-opacity group-hover/tool:opacity-100">حط صورة</span>
           </div>
           <input type="file" accept="image/*" className="hidden" ref={fileRef} onChange={handleImg} />
+          <button onClick={() => videoRef.current?.click()} title="حط فيديو" aria-label="حط فيديو" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl text-gray-500 hover:text-[#e5484d] hover:bg-red-50 transition-all"><Video size={18}/></button>
+          <input type="file" accept="video/*" className="hidden" ref={videoRef} onChange={handleVideo} />
 
           <div className="w-px h-6 bg-gray-200 mx-0.5" />
 
           {/* Undo/Redo */}
-          <button onClick={handleUndo} title="تراجع" className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"><Undo size={16} /></button>
-          <button onClick={handleRedo} title="إعادة" className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"><Redo size={16} /></button>
+          <button onClick={handleUndo} title="ارجع خطوة" className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"><Undo size={16} /></button>
+          <button onClick={handleRedo} title="قدّم خطوة" className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"><Redo size={16} /></button>
+          <div className="w-px h-6 bg-gray-200 mx-0.5" />
+          <button onClick={() => zoom(-0.15)} title="صغّر" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-stone-100"><Minus size={16}/></button>
+          <button onClick={resetZoom} title="رجّع الحجم" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-stone-100"><RotateCcw size={15}/></button>
+          <button onClick={() => zoom(0.15)} title="كبّر" className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-500 hover:bg-stone-100"><Plus size={16}/></button>
+          <button onClick={() => setCollapsed(true)} title="صغّر الأدوات" className="toolbar-action w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:bg-stone-100"><MoreHorizontal size={17}/></button>
         </div>
 
         {/* ── Sub Options Bar ── */}
-        {(isPenLike || currentTool === 'text' || currentTool === 'shape') && (
-          <div className="flex items-center gap-3 bg-white/95 backdrop-blur-2xl border border-gray-200/80 rounded-2xl px-4 py-2 shadow-lg shadow-black/[0.04]">
+        {hasOptions && (
+          <div className="app-horizontal-scroll flex w-max max-w-[calc(100vw-12px)] flex-nowrap items-center gap-3 overflow-x-auto rounded-2xl border border-stone-200 bg-white/95 px-4 py-2 shadow-sm backdrop-blur-xl">
             
             {/* Font picker (text only) */}
             {currentTool === 'text' && (
               <>
                 <select value={activeFont} onChange={e => setActiveFont(e.target.value)}
                   className="bg-transparent border-none text-sm font-semibold text-gray-700 outline-none cursor-pointer pr-1" style={{ fontFamily: activeFont }}>
-                  {FONTS.map(f => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
+                  {FONTS.map(f => <option key={f.name} value={f.name} style={{ fontFamily: f.name }}>{f.label}</option>)}
                 </select>
                 <div className="w-px h-5 bg-gray-200" />
               </>
@@ -172,7 +196,7 @@ export function Toolbar() {
             </div>
 
             {/* Thickness */}
-            {(isPenLike || (currentTool === 'shape' && ['line','arrow'].includes(activeShape))) && (
+            {(isPenLike || currentTool === 'shape') && (
               <>
                 <div className="w-px h-5 bg-gray-200" />
                 <div className="flex items-center gap-2 w-[120px]">
@@ -186,6 +210,11 @@ export function Toolbar() {
             )}
           </div>
         )}
+        {currentTool === 'shape' && <div className="app-horizontal-scroll flex w-max max-w-[calc(100vw-12px)] flex-nowrap items-center gap-2 overflow-x-auto rounded-2xl border border-stone-200 bg-white/95 px-3 py-2 shadow-sm" aria-label="اختار نوع الشكل">
+          <span className="shrink-0 text-[11px] font-bold text-stone-400">الأشكال</span>
+          {SHAPES_LIST.map(s => <button key={s.id} onClick={() => { setActiveShape(s.id as any); setTool('shape'); }} className={clsx('flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors', activeShape === s.id ? 'border-[#e5484d] bg-[#fff2f2] text-[#c7373c]' : 'border-stone-200 text-stone-600 hover:bg-stone-50')}><span className="text-base leading-none">{s.icon}</span>{s.label}</button>)}
+        </div>}
+        </>}
       </div>
     </>
   );

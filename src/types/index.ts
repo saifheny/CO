@@ -37,6 +37,8 @@ export interface TextElement extends BaseElement {
   align?: 'left' | 'center' | 'right';
 }
 
+export type MediaFrameStyle = 'solid' | 'dashed' | 'double' | 'polaroid' | 'neon' | 'film' | 'cinema' | 'tape' | 'shadow';
+
 export interface ImageElement extends BaseElement {
   type: 'image';
   src: string;
@@ -45,10 +47,26 @@ export interface ImageElement extends BaseElement {
   cropShape?: 'rectangle' | 'circle' | 'rounded';
   borderWidth?: number;
   borderColor?: string;
-  borderStyle?: 'solid' | 'dashed' | 'double' | 'polaroid';
+  borderStyle?: MediaFrameStyle;
   caption?: string;
+  /** Position is relative to the top-left of the image, so the comment can be dragged independently. */
+  captionX?: number;
+  captionY?: number;
   fontFamily?: string;
   backgroundRemoved?: boolean;
+}
+
+export interface VideoElement extends BaseElement {
+  type: 'video';
+  src: string;
+  width: number;
+  height: number;
+  muted?: boolean;
+  playing?: boolean;
+  cropShape?: 'rectangle' | 'circle' | 'rounded';
+  borderWidth?: number;
+  borderColor?: string;
+  borderStyle?: MediaFrameStyle;
 }
 
 export interface ShapeElement extends BaseElement {
@@ -61,7 +79,7 @@ export interface ShapeElement extends BaseElement {
   strokeWidth?: number;
 }
 
-export type CanvasElement = StrokeElement | TextElement | ImageElement | ShapeElement;
+export type CanvasElement = StrokeElement | TextElement | ImageElement | VideoElement | ShapeElement;
 
 export interface Page {
   id: string;

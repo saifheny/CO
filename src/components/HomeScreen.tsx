@@ -1,160 +1,71 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
-import { useStore } from '../store/useStore';
-import { Sparkles, Plus, FileText, X, Trash2, PenLine, Image as ImageIcon, ChevronLeft, Smartphone, Palette, Grid3X3, ListChecks, ArrowUpLeft } from 'lucide-react';
+import { Check, FileText, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import clsx from 'clsx';
+import { db } from '../db/db';
+import { useStore } from '../store/useStore';
 
-const BACKGROUNDS = [
-  { id: 'color', label: 'أبيض', value: '#ffffff' },
-  { id: 'grid', label: 'شبكة', value: '#f9fafb' },
-  { id: 'lines', label: 'سطور', value: '#f9fafb' },
-  { id: 'dots', label: 'نقاط', value: '#f9fafb' },
-  { id: 'dark', label: 'داكن', value: '#1e1e2e' },
-  { id: 'cream', label: 'كريمي', value: '#fdf6e3' },
-];
+const PATTERNS = [{ id: 'color', label: 'سادة' }, { id: 'dots', label: 'نقط' }, { id: 'grid', label: 'مربعات' }, { id: 'lines', label: 'مسطّرة' }];
+const PAGE_COLORS = ['#ffffff', '#f8fafc', '#fff7ed', '#fefce8', '#f0fdf4', '#eff6ff', '#f5f3ff', '#fdf2f8', '#1e1e2e'];
+const APP_ICON = `${import.meta.env.BASE_URL}icon.svg`;
 
-const NOTE_IMAGE = 'https://images.unsplash.com/photo-1745302281184-dfdad65fe6cc?auto=format&fit=crop&fm=jpg&q=80&w=1800';
+const previewStyle = (type: string, color = '#ffffff') => {
+  const base = { backgroundColor: color };
+  if (type === 'grid') return { ...base, backgroundImage: 'linear-gradient(#d6d3d1 1px, transparent 1px), linear-gradient(90deg, #d6d3d1 1px, transparent 1px)', backgroundSize: '18px 18px' };
+  if (type === 'dots') return { ...base, backgroundImage: 'radial-gradient(#c4c0bb 1.2px, transparent 1.3px)', backgroundSize: '15px 15px' };
+  if (type === 'lines') return { ...base, backgroundImage: 'linear-gradient(#ded9d2 1px, transparent 1px)', backgroundSize: '100% 22px' };
+  return base;
+};
 
 export const HomeScreen: React.FC = () => {
-  const pages = useLiveQuery(() => db.pages.toArray().then(p => p.sort((a, b) => b.updatedAt - a.updatedAt)));
+  const pages = useLiveQuery(() => db.pages.toArray().then(items => items.sort((a, b) => b.updatedAt - a.updatedAt)));
   const { setActivePageId, setView } = useStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newBg, setNewBg] = useState('dots');
+  const [newPattern, setNewPattern] = useState('color');
+  const [newColor, setNewColor] = useState('#ffffff');
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const pressTimer = useRef<number | null>(null);
+  const preventOpen = useRef(false);
 
-  const handleCreate = async () => {
+  const createPage = async () => {
     if (!newTitle.trim()) return;
     const id = uuidv4();
-    const bg = BACKGROUNDS.find(b => b.id === newBg) || BACKGROUNDS[0];
-    await db.pages.add({ id, notebookId: 'default-notebook', title: newTitle.trim(), order: Date.now(), elements: [], background: { type: bg.id as any, value: bg.value }, createdAt: Date.now(), updatedAt: Date.now() });
-    setActivePageId(id); setView('canvas'); setIsModalOpen(false); setNewTitle('');
+    await db.pages.add({ id, notebookId: 'default-notebook', title: newTitle.trim(), order: Date.now(), elements: [], background: { type: newPattern as any, value: newColor }, createdAt: Date.now(), updatedAt: Date.now() });
+    setActivePageId(id); setView('canvas'); setCreating(false); setNewTitle('');
   };
+  const openPage = (id: string) => { if (preventOpen.current) { preventOpen.current = false; return; } setActivePageId(id); setView('canvas'); };
+  const startPress = (id: string) => { preventOpen.current = false; pressTimer.current = window.setTimeout(() => { preventOpen.current = true; setMenuId(id); }, 520); };
+  const endPress = () => { if (pressTimer.current) window.clearTimeout(pressTimer.current); pressTimer.current = null; };
+  const beginRename = (id: string, title: string) => { setMenuId(null); setRenamingId(id); setRenameValue(title); };
+  const saveRename = async (id: string) => { if (renameValue.trim()) await db.pages.update(id, { title: renameValue.trim(), updatedAt: Date.now() }); setRenamingId(null); };
+  const deletePage = async (id: string) => { await db.pages.delete(id); setMenuId(null); };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => { e.stopPropagation(); await db.pages.delete(id); };
+  if (creating) return <div className="app-scroll h-screen overflow-y-auto bg-[#f6f7f9] text-stone-900" dir="rtl" style={{ fontFamily: 'Cairo, Arial, sans-serif' }}>
+    <button onClick={() => setCreating(false)} className="fixed left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-sm font-bold text-stone-600 shadow-sm ring-1 ring-stone-200 transition hover:-translate-y-0.5 hover:shadow-md sm:left-8"><X size={17}/> رجوع</button>
+    <main className="mx-auto grid max-w-5xl gap-9 px-4 pb-12 pt-20 sm:px-8 lg:grid-cols-[1fr_300px]">
+      <section><p className="text-xs font-bold tracking-[.14em] text-[#d83d43]">نوتة جديدة</p><h1 className="mt-2 text-2xl font-bold">ظبّط ورقتك على مزاجك.</h1><p className="mt-1 text-sm text-stone-500">اختار الاسم واللون والشكل اللي يريحك.</p><label className="mt-8 block text-sm font-bold">اسم النوتة</label><input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && createPage()} placeholder="مثال: مراجعة الدرس التالت" className="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 text-sm outline-none focus:border-[#e5484d] focus:ring-4 focus:ring-red-50" />
+        <div className="mt-8 border-t border-stone-200 pt-6"><div className="flex items-center justify-between"><div><h2 className="text-sm font-bold">لون الورقة</h2><p className="mt-1 text-xs text-stone-400">اللون هيفضل زي ما اخترته لحد ما تغيّره بنفسك.</p></div><span className="h-10 w-10 rounded-full border-4 border-white shadow ring-1 ring-stone-200" style={{ backgroundColor: newColor }} /></div><div className="mt-4 flex flex-wrap gap-3">{PAGE_COLORS.map((color, i) => <button key={color} onClick={() => setNewColor(color)} aria-label={`اختيار اللون ${color}`} className={clsx('flex h-11 w-11 items-center justify-center rounded-full border-2 transition-transform hover:scale-110', newColor === color ? 'scale-110 border-[#e5484d] ring-4 ring-red-100' : 'border-white shadow-sm ring-1 ring-stone-200')} style={{ backgroundColor: color }}>{newColor === color && <Check size={16} className={i === PAGE_COLORS.length - 1 ? 'text-white' : 'text-stone-700'} />}</button>)}<label className="relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full shadow-sm ring-1 ring-stone-200" style={{ background: 'conic-gradient(#f43f5e,#fbbf24,#22c55e,#06b6d4,#6366f1,#d946ef,#f43f5e)' }}><span className="rounded-full bg-white px-1 text-xs font-bold">+</span><input type="color" aria-label="لون مخصص" value={newColor} onChange={e => setNewColor(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0"/></label></div></div>
+        <div className="mt-8 border-t border-stone-200 pt-6"><h2 className="text-sm font-bold">شكل الورقة</h2><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{PATTERNS.map(pattern => <button key={pattern.id} onClick={() => setNewPattern(pattern.id)} className={clsx('overflow-hidden rounded-2xl border p-2 text-right transition', newPattern === pattern.id ? 'border-[#e5484d] ring-2 ring-red-100' : 'border-stone-200 hover:-translate-y-0.5 hover:shadow-md')}><span className="block h-20 rounded-xl border border-stone-200" style={previewStyle(pattern.id, newColor)} /><span className="mt-2 flex items-center justify-between text-xs font-bold">{pattern.label}{newPattern === pattern.id && <Check size={14} className="text-[#e5484d]"/>}</span></button>)}</div></div>
+        <button onClick={createPage} disabled={!newTitle.trim()} className="mt-8 w-full rounded-2xl bg-[#e5484d] py-3.5 text-sm font-bold text-white transition hover:bg-[#ce3d43] disabled:bg-stone-200 disabled:text-stone-400">اعمِل النوتة وافتحها</button>
+      </section>
+      <aside><p className="text-xs font-bold text-stone-400">شكلها هيبقى كده</p><div className="mt-3 aspect-[4/3] rounded-2xl border border-stone-200 p-5 shadow-sm" style={previewStyle(newPattern, newColor)}><div className="flex h-full flex-col justify-between"><span className="w-fit rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-[#d83d43]">نوتة</span><h3 className="text-xl font-bold">{newTitle || 'نوتة من غير اسم'}</h3></div></div></aside>
+    </main>
+  </div>;
 
-  const bgPreview = (type: string) => {
-    if (type === 'grid') return { backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)', backgroundSize: '16px 16px' };
-    if (type === 'dots') return { backgroundImage: 'radial-gradient(#d1d5db 1.5px, transparent 1.5px)', backgroundSize: '14px 14px' };
-    if (type === 'lines') return { backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px)', backgroundSize: '100% 18px' };
-    if (type === 'dark') return { backgroundColor: '#1e1e2e' };
-    if (type === 'cream') return { backgroundColor: '#fdf6e3' };
-    return { backgroundColor: '#fff' };
-  };
-
-  return (
-    <div className="min-h-screen bg-[#fbfaf9] text-[#292524]" style={{ fontFamily: 'Cairo, Arial, sans-serif' }} dir="rtl">
-      <div className="px-4 sm:px-6 pt-4">
-        <header className="max-w-6xl mx-auto flex justify-between items-center bg-white/85 backdrop-blur-xl border border-stone-200/80 rounded-[22px] px-4 sm:px-5 py-3 shadow-[0_10px_35px_rgba(41,37,36,.05)]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#e5484d] rounded-[13px] flex items-center justify-center shadow-[0_6px_18px_rgba(229,72,77,.28)]">
-              <PenLine size={17} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Smart Notebook</h1>
-              <p className="text-xs text-gray-400">دفتر ملاحظات ذكي</p>
-            </div>
-          </div>
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-[#e5484d] hover:bg-[#cf3f45] text-white px-3.5 sm:px-4 py-2 rounded-xl font-bold text-sm shadow-[0_6px_16px_rgba(229,72,77,.22)] transition-all hover:-translate-y-0.5">
-            <Plus size={17} strokeWidth={2.5} /> <span className="hidden sm:inline">ملاحظة جديدة</span><span className="sm:hidden">جديد</span>
-          </button>
-        </header>
-      </div>
-
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <section className="relative overflow-hidden rounded-[28px] bg-[#292524] min-h-[230px] sm:min-h-[270px] mb-8 shadow-[0_18px_48px_rgba(41,37,36,.12)]">
-          <img src={NOTE_IMAGE} alt="الكتابة بالقلم على جهاز لوحي" className="absolute inset-0 h-full w-full object-cover opacity-45" />
-          <div className="absolute inset-0 bg-gradient-to-l from-[#292524]/88 via-[#292524]/68 to-[#292524]/20" />
-          <div className="relative z-10 h-full p-7 sm:p-10 flex flex-col items-start justify-center max-w-xl">
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold rounded-full bg-white/12 border border-white/20 text-white/90 px-3 py-1.5 mb-4"><Sparkles size={13} /> مساحة أفكارك الخاصة</span>
-            <h2 className="text-2xl sm:text-4xl leading-tight font-bold text-white">اكتب. ارسم. رتّب كل فكرة.</h2>
-            <p className="mt-3 text-sm sm:text-base text-white/75 max-w-md">ملاحظات مرنة تشبه الورق، مع الرسم والصور والنصوص القابلة للتعديل.</p>
-            <div className="mt-6 flex flex-wrap gap-2 text-xs text-white/80">
-              <span className="rounded-lg bg-white/10 px-3 py-2"><Palette size={14} className="inline ml-1.5" />رسم حر</span>
-              <span className="rounded-lg bg-white/10 px-3 py-2"><ImageIcon size={14} className="inline ml-1.5" />صور وتعليقات</span>
-              <span className="rounded-lg bg-white/10 px-3 py-2"><Smartphone size={14} className="inline ml-1.5" />جاهز للموبايل</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid lg:grid-cols-[1fr_270px] gap-5 items-start">
-          <div>
-            <div className="flex items-end justify-between mb-4">
-              <div><p className="text-xs font-bold tracking-wide text-[#e5484d]">مَساحاتي</p><h2 className="text-xl font-bold mt-1">ملاحظاتك الأخيرة</h2></div>
-              <button onClick={() => setIsModalOpen(true)} className="text-sm font-bold text-[#c7373c] hover:text-[#e5484d]">إنشاء ملاحظة <ChevronLeft size={16} className="inline" /></button>
-            </div>
-            {pages?.length === 0 && (
-              <div className="bg-white rounded-[24px] border border-stone-200 p-10 sm:p-14 text-center shadow-sm">
-                <div className="w-16 h-16 bg-[#fff1f1] rounded-[20px] mx-auto mb-5 flex items-center justify-center"><FileText size={28} className="text-[#e9898d]" /></div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">ابدأ دفترك الأول</h3><p className="text-gray-400 text-sm">أنشئ أول ملاحظة وارسم أو اكتب عليها فورًا.</p>
-              </div>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {pages?.map(page => (
-            <div key={page.id} onClick={() => { setActivePageId(page.id); setView('canvas'); }}
-              className="group bg-white rounded-[20px] border border-stone-200 hover:border-[#e9898d] overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-xl hover:-translate-y-1">
-              {/* Preview */}
-              <div className="aspect-[4/3] relative border-b border-gray-50 overflow-hidden" style={bgPreview(page.background.type)}>
-                <FileText size={28} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-200 group-hover:text-[#e9898d] transition-colors" />
-                <button onClick={(e) => handleDelete(e, page.id)} className="absolute top-2 left-2 p-1.5 bg-white/90 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 text-gray-400 hover:text-red-500">
-                  <Trash2 size={13} />
-                </button>
-              </div>
-              <div className="p-3">
-                <h3 className="font-semibold text-gray-800 text-sm truncate">{page.title}</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">{new Date(page.updatedAt).toLocaleDateString('ar-EG')}</p>
-              </div>
-            </div>
-              ))}
-            </div>
-          </div>
-          <aside className="bg-white border border-stone-200 rounded-[24px] p-5 shadow-sm">
-            <p className="text-xs font-bold text-stone-400">نظرة سريعة</p>
-            <p className="text-3xl font-bold mt-1">{pages?.length || 0}<span className="text-sm font-semibold text-stone-400 mr-1">ملاحظات</span></p>
-            <div className="h-px bg-stone-100 my-5" />
-            <p className="text-sm font-bold mb-3">ابدأ بطريقتك</p>
-            <button onClick={() => setIsModalOpen(true)} className="w-full text-right flex items-center gap-3 rounded-xl p-3 hover:bg-[#fff5f5] transition-colors group"><span className="w-9 h-9 rounded-xl bg-red-50 text-[#e5484d] flex items-center justify-center"><Grid3X3 size={17}/></span><span className="text-xs font-bold flex-1">صفحة شبكية</span><ArrowUpLeft size={15} className="text-stone-300 group-hover:text-[#e5484d]" /></button>
-            <button onClick={() => setIsModalOpen(true)} className="w-full text-right flex items-center gap-3 rounded-xl p-3 hover:bg-[#fff5f5] transition-colors group"><span className="w-9 h-9 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center"><ListChecks size={17}/></span><span className="text-xs font-bold flex-1">قائمة أو ملخص</span><ArrowUpLeft size={15} className="text-stone-300 group-hover:text-[#e5484d]" /></button>
-            <p className="mt-4 text-[11px] leading-5 text-stone-400">كل ملاحظاتك محفوظة على جهازك، وتعمل حتى دون اتصال بعد التثبيت.</p>
-          </aside>
-        </section>
-      </main>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-gray-900">ملف جديد</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors"><X size={18} /></button>
-            </div>
-            <div className="p-5">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">اسم الملف</label>
-              <input autoFocus type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl p-3 focus:border-red-400 focus:ring-2 focus:ring-red-100 outline-none transition-all text-sm"
-                placeholder="مثال: محاضرة الرياضيات" onKeyDown={(e) => e.key === 'Enter' && handleCreate()} />
-
-              <label className="block text-sm font-semibold text-gray-700 mb-2 mt-5">خلفية الصفحة</label>
-              <div className="grid grid-cols-3 gap-2">
-                {BACKGROUNDS.map(bg => (
-                  <button key={bg.id} onClick={() => setNewBg(bg.id)}
-                    className={clsx("flex flex-col items-center gap-1.5 p-2.5 rounded-xl border transition-all text-xs font-medium",
-                      newBg === bg.id ? "border-red-400 bg-red-50 text-red-600" : "border-gray-100 hover:border-gray-300 text-gray-500")}>
-                    <div className="w-9 h-9 rounded-lg border border-gray-100 overflow-hidden" style={bgPreview(bg.id)} />
-                    {bg.label}
-                  </button>
-                ))}
-              </div>
-
-              <button onClick={handleCreate} disabled={!newTitle.trim()}
-                className="w-full mt-6 bg-red-500 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white py-3 rounded-xl font-bold text-sm transition-all">
-                إنشاء وفتح
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="app-scroll h-screen overflow-y-auto overscroll-contain bg-[#f6f7f9] text-stone-900" dir="rtl" style={{ fontFamily: 'Cairo, Arial, sans-serif' }}>
+    <header className="sticky top-0 z-20 border-b border-stone-200/80 bg-[#f6f7f9]/90 px-4 py-3 backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between"><button onClick={() => setCreating(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#e5484d] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#ce3d43]"><Plus size={17}/> نوتة جديدة</button><div className="flex items-center gap-2.5"><div className="text-left"><p className="text-base font-extrabold tracking-tight">Smart Notebook</p><p className="text-[11px] text-stone-400">مساحة أفكارك</p></div><img src={APP_ICON} alt="Smart Notebook" className="h-10 w-10"/></div></div></header>
+    <main className="mx-auto max-w-7xl px-4 py-7 pb-12 sm:px-8"><section className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-5"><div><p className="text-xs font-bold tracking-[.14em] text-[#d83d43]">نوتاتك</p><h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">كل نوتاتك</h1><p className="mt-1 text-sm text-stone-500">دوس مطوّل على أي نوتة علشان تغيّر اسمها أو تمسحها.</p></div><span className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-500">{pages?.length || 0} نوتة</span></section>
+      {!pages?.length ? <div className="mt-8 grid min-h-[320px] place-items-center rounded-[28px] border border-dashed border-stone-300 bg-white p-8 text-center"><div><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-[#e5484d]"><FileText size={26}/></div><h2 className="mt-4 text-lg font-bold">دفترك مستني أول فكرة</h2><p className="mt-1 text-sm text-stone-500">اعمِل نوتة واختار لونها وشكلها.</p><button onClick={() => setCreating(true)} className="mt-5 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-stone-700">ابدأ دلوقتي</button></div></div> : <section className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{pages.map(page => {
+        const isMenuOpen = menuId === page.id; const isRenaming = renamingId === page.id; const paperColor = page.background?.value || '#ffffff';
+        return <article key={page.id} onPointerDown={() => startPress(page.id)} onPointerUp={endPress} onPointerLeave={endPress} onPointerCancel={endPress} onClick={() => openPage(page.id)} className="group relative min-h-[230px] cursor-pointer overflow-hidden rounded-[22px] border border-stone-200 bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:border-stone-300 hover:shadow-lg"><div className="absolute inset-x-0 top-0 h-[150px] border-b border-stone-200" style={previewStyle(page.background?.type || 'color', paperColor)}><FileText size={28} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-stone-400/60"/><button onClick={e => { e.stopPropagation(); setMenuId(isMenuOpen ? null : page.id); }} aria-label="خيارات الملاحظة" className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-xl border border-stone-200 bg-white/90 text-stone-600 shadow-sm opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100"><MoreHorizontal size={17}/></button></div>
+          <div className="absolute inset-x-0 bottom-0 bg-white p-4 pt-3">{isRenaming ? <div onClick={e => e.stopPropagation()} className="flex gap-1.5"><input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveRename(page.id)} className="min-w-0 flex-1 rounded-lg border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#e5484d]"/><button onClick={() => saveRename(page.id)} className="rounded-lg bg-[#e5484d] px-2 text-white"><Check size={15}/></button></div> : <><h2 className="truncate text-sm font-bold">{page.title}</h2><p className="mt-1 text-[11px] text-stone-400">اتعدّلت {new Date(page.updatedAt).toLocaleDateString('ar-EG')}</p></>}</div>
+          {isMenuOpen && <div onClick={e => e.stopPropagation()} className="absolute left-3 top-12 z-10 flex overflow-hidden rounded-xl border border-stone-200 bg-white shadow-xl"><button onClick={() => beginRename(page.id, page.title)} className="flex items-center gap-1.5 border-l border-stone-100 px-3 py-2 text-xs font-bold text-stone-700 hover:bg-stone-50"><Pencil size={14}/> غيّر الاسم</button><button onClick={() => deletePage(page.id)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50"><Trash2 size={14}/> امسح</button></div>}
+        </article>;
+      })}</section>}
+    </main>
+  </div>;
 };

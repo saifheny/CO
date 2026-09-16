@@ -3,6 +3,7 @@ import { Toolbar } from './components/Toolbar';
 import { CanvasEditor } from './components/canvas/CanvasEditor';
 import { AIContextMenu } from './components/AIContextMenu';
 import { HomeScreen } from './components/HomeScreen';
+import { InstallGate } from './components/InstallGate';
 import { initDB } from './db/db';
 import { useStore } from './store/useStore';
 
@@ -19,20 +20,20 @@ function App() {
       <div className="flex items-center justify-center h-screen bg-[#fbfaf9]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-11 h-11 border-4 border-[#e5484d] border-t-transparent rounded-[14px] animate-spin" />
-          <span className="text-gray-400 text-sm font-medium">يتم تجهيز دفترك...</span>
+          <span className="text-gray-400 text-sm font-medium">بنجهّز دفترك...</span>
         </div>
       </div>
     );
   }
 
-  if (view === 'home') return <HomeScreen />;
+  if (view === 'home') return <InstallGate><HomeScreen /></InstallGate>;
 
-  return (
+  return <InstallGate>
     <div className="flex h-screen w-full bg-white text-gray-900 overflow-hidden relative">
       <CanvasEditor />
       {!isPresenting && <><AIContextMenu /><Toolbar /></>}
     </div>
-  );
+  </InstallGate>;
 }
 
 export default App;

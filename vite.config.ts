@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg', 'pwa-192.png', 'pwa-512.png', 'social-preview.png'],
+      includeAssets: ['icon.svg', 'pwa-icon-192.png', 'pwa-icon-512.png', 'social-preview.png'],
       manifest: {
         name: 'Smart Notebook - دفتر الملاحظات الذكي',
         short_name: 'Smart Notebook',
@@ -18,12 +18,12 @@ export default defineConfig({
         theme_color: '#dc2626',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'any',
+        orientation: 'portrait',
         start_url: '.',
         categories: ['productivity', 'education'],
         icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: 'pwa-icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'pwa-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ],
         screenshots: [{ src: 'social-preview.png', sizes: '1200x1200', type: 'image/png', form_factor: 'wide', label: 'Smart Notebook' }],
         share_target: {
